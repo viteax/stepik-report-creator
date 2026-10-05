@@ -1,6 +1,6 @@
 [project]
 name = "stepik-report-creator"
-version = "1.0.0"
+version = "1.1.0"
 description = "Собирает docx-отчет с решениями задач из курса Stepik: код, условия и подписи — за одну команду"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -9,6 +9,7 @@ dependencies = [
     "coloredlogs>=15.0.1",
     "environs>=14.1.1",
     "pillow>=11.2.1",
+    "pygments>=2.19.0",
     "pydantic>=2.11.3",
     "python-docx>=1.1.2",
     "requests>=2.32.3",

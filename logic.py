@@ -75,7 +75,9 @@ def parse_block_text(html_text: str) -> CodeProblem | None:
     )
 
 
-def get_code_solutions(lesson: Lesson, stepik: StepikClient) -> list[CodeSolution]:
+def get_code_solutions(
+    lesson: Lesson, stepik: StepikClient, as_images: bool = False
+) -> list[CodeSolution]:
     logger.info(f"Getting code solutions «{lesson.title}»\n")
 
     code_solutions = []
@@ -92,13 +94,16 @@ def get_code_solutions(lesson: Lesson, stepik: StepikClient) -> list[CodeSolutio
         if not code_str:
             continue
 
-        img_path = f"{IMGS_PATH}/{code_problem.title}.png"
-        save_code_picture(img_path, code_str)
+        img_path = None
+        if as_images:
+            img_path = f"{IMGS_PATH}/{code_problem.title}.png"
+            save_code_picture(img_path, code_str)
 
         code_solutions.append(
             CodeSolution(
                 title=code_problem.title,
                 description=code_problem.description,
+                code=code_str,
                 img_path=img_path,
             )
         )
