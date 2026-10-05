@@ -512,7 +512,7 @@ wheels = [
 ]
 
 [[package]]
-name = "very-interesting-task"
+name = "stepik-report-creator"
 version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
