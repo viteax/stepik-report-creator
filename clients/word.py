@@ -1,40 +1,18 @@
 import os
 
 from docx import Document
-from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.shared import Cm, Pt, RGBColor
-from pygments import lex
-from pygments.lexers import PythonLexer
-from pygments.styles import get_style_by_name
+from docx.shared import Cm
+
+from docx_code import add_code, ensure_code_style
 
 PAGE_WIDTH_CM = 15.25
-
-CODE_STYLE = "Code"
-CODE_FONT = "Courier New"  # есть на любом компьютере, в отличие от JetBrains Mono
-CODE_FONT_SIZE = Pt(10)
-PYGMENTS_STYLE = get_style_by_name("friendly")
 
 
 class WordClient:
     def __init__(self, doc_path: str):
         self.doc = Document(docx=doc_path)
-        self._ensure_code_style()
-
-    def _ensure_code_style(self) -> None:
-        if CODE_STYLE in [s.name for s in self.doc.styles]:
-            return
-        style = self.doc.styles.add_style(CODE_STYLE, WD_STYLE_TYPE.PARAGRAPH)
-        style.base_style = self.doc.styles["Normal"]
-        style.font.name = CODE_FONT
-        style.font.size = CODE_FONT_SIZE
-        pf = style.paragraph_format
-        pf.first_line_indent = Pt(0)
-        pf.left_indent = Pt(0)
-        pf.line_spacing = 1.0
-        pf.space_before = Pt(0)
-        pf.space_after = Pt(0)
-        pf.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+        ensure_code_style(self.doc)
 
     def add_heading1(self, title: str) -> None:
         self.doc.add_heading(title, level=1)
@@ -53,15 +31,8 @@ class WordClient:
         self.doc.add_paragraph()
 
     def add_code(self, code: str) -> None:
-        """Вставляет код текстом с подсветкой синтаксиса (один абзац стиля Code)."""
-        p = self.doc.add_paragraph(style=CODE_STYLE)
-        for token_type, value in lex(code.strip("\n"), PythonLexer()):
-            token_style = PYGMENTS_STYLE.style_for_token(token_type)
-            run = p.add_run(value)
-            if token_style["color"]:
-                run.font.color.rgb = RGBColor.from_string(token_style["color"])
-            run.bold = token_style["bold"]
-            run.italic = token_style["italic"]
+        """Код текстом с подсветкой синтаксиса (см. docx_code.py)."""
+        add_code(self.doc, code)
 
     def add_solution(self, no: int, title: str, descr: str, code: str) -> None:
         """Решение в виде листинга: код текстом, его можно копировать."""
