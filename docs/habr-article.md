@@ -30,70 +30,13 @@
 
 ## Решение
 
-### Модели данных
+Весь проект – цепочка из четырех шагов: достать данные из API, разобрать условие, превратить решение в красивый кусок документа и собрать все в .docx. Разберем по порядку.
 
-Сначала нужно было разобраться, где в ответах API лежат нужные данные. Чтобы не ковыряться в словарях, я описал ответы моделями Pydantic – заодно они валидируют JSON:
+### Достаем данные из Stepik
 
-```python
-from pydantic import BaseModel
+Структура у Stepik такая: курс → разделы (sections) → уроки (lessons) → шаги (steps). Задачи с кодом – это шаги с блоком типа `code`. Чтобы не ковыряться в словарях, я описал ответы API моделями Pydantic: они же заодно валидируют JSON. Получилось скучно: по паре полей на каждую сущность (`Lesson`, `Step`, `Block` и т. д.), поэтому код здесь показывать не буду – он в [репозитории](https://github.com/viteax/stepik-report-creator/tree/master/models).
 
-
-class Lesson(BaseModel):
-    id: int
-    steps: list[int]
-    title: str
-
-
-class LessonResponse(BaseModel):
-    meta: dict
-    lessons: list[Lesson]
-
-
-class Block(BaseModel):
-    name: str
-    text: str
-
-
-class Step(BaseModel):
-    id: int
-    block: Block
-
-
-class StepResponse(BaseModel):
-    meta: dict
-    steps: list[Step]
-
-# ... и т. д.
-```
-
-### Клиент Stepik
-
-Цепочка такая: курс → разделы (sections) → уроки (lessons) → шаги (steps). Задачи с кодом – это шаги с блоком типа `code`.
-
-```python
-class StepikClient:
-    session = get_session()
-
-    def get_section_id(self, course_id: int, section_no: int) -> int:
-        resp = self.session.get(f"{API_URL}/courses/{course_id}")
-        course_resp = CoursesResponse.model_validate(resp.json())
-        sections_ids = course_resp.courses[0].sections
-        if not (0 < section_no <= len(sections_ids)):
-            raise IndexError("Раздела с таким номером не существует")
-        return sections_ids[section_no - 1]
-
-    def get_section(self, id: int) -> Section:
-        resp = self.session.get(f"{API_URL}/sections/{id}")
-        return SectionsResponse.model_validate(resp.json()).sections[0]
-
-    def get_lesson(self, id: int) -> Lesson:
-        resp = self.session.get(f"{API_URL}/lessons/{id}")
-        return LessonResponse.model_validate(resp.json()).lessons[0]
-
-    # и другие методы
-```
-
-Чтобы получить **свои** решения, нужен токен. Stepik выдает его по OAuth2: на странице [stepik.org/oauth2/applications](https://stepik.org/oauth2/applications/) создаем приложение с типом клиента `confidential` и grant type `client-credentials`, получаем `client_id` и `client_secret` и кладем их в `.env`. Дальше токен получается одним запросом:
+Самое интересное – **свои решения**: для них нужен токен. Stepik выдает его по OAuth2: на странице [stepik.org/oauth2/applications](https://stepik.org/oauth2/applications/) создаем приложение с типом клиента `confidential` и grant type `client-credentials`, получаем `client_id` и `client_secret` и кладем их в `.env`. Дальше токен получается одним запросом:
 
 ```python
 def get_session() -> requests.Session:
@@ -125,114 +68,17 @@ def get_solution_code(self, step_id: int) -> str | None:
     return None
 ```
 
-### Разбор условия
+### Разбираем условие
 
-Условие приходит в виде HTML, так что пришлось немного попарсить его через BeautifulSoup. Берем заголовок и текст до раздела «Формат входных данных»:
+Условие приходит в виде HTML, так что пришлось немного попарсить его через BeautifulSoup. Логика простая: заголовок берем из `<h2>`, а описание – это абзацы до «Формата входных данных». Попутно выяснилось, что у задач повышенной сложности заголовка нет, – в отчет я их не включаю.
 
-```python
-def parse_block_text(html_text: str) -> CodeProblem | None:
-    soup = BeautifulSoup(html_text, "html.parser")
+### Первая версия: код картинкой
 
-    # В описаниях некоторых задач нет заголовка.
-    # Это задачи повышенной сложности, их в отчет не включаем.
-    if not soup.h2:
-        return None
+Получив строку с решением, я вбил в поиск «str to png python» и познакомился с Pillow. Рисуем текст моноширинным шрифтом JetBrains Mono на белом фоне – никакого браузера, Selenium и скриншотов. Сначала меряем `textbbox`, сколько места займет код, потом рисуем на холсте нужного размера. Дальше картинка вставляется в документ с подписью «Рисунок 2.N». На это я написал тесты, чтобы убедиться, что картинки получаются корректными.
 
-    problem_title = soup.h2.text.replace("\xa0", " ")
-    problem_descriptions = []
-    for p in soup.find_all("p"):
-        text = p.text
-        if text.startswith("Формат входных данных"):
-            break
-        problem_descriptions.append(text.replace("\xa0", " "))
+### Собираем документ
 
-    return CodeProblem(title=problem_title, description=problem_descriptions)
-```
-
-### Код решения картинкой (первая версия)
-
-Получив строку с решением, я вбил в поиск «str to png python» и познакомился с Pillow. Рисуем текст моноширинным шрифтом JetBrains Mono на белом фоне – никакого браузера:
-
-```python
-PADDING = 20
-FONT_SIZE = 24
-FONT_PATH = "assets/JetBrainsMono-Regular.ttf"
-
-
-def save_code_picture(img_path: str, code_str: str) -> None:
-    font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
-    code_str = code_str.strip()
-
-    # Сначала меряем, сколько места займет текст...
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    _, _, right, bottom = probe.textbbox((PADDING, PADDING), code_str, font=font)
-
-    # ...потом рисуем на холсте нужного размера
-    img = Image.new("RGB", (right + PADDING, bottom + PADDING), "white")
-    ImageDraw.Draw(img).text((PADDING, PADDING), code_str, fill="black", font=font)
-    img.save(img_path, "PNG")
-```
-
-На это написал тесты, чтобы убедиться, что картинки получаются корректными.
-
-Дальше все собирается в список решений для каждого урока:
-
-```python
-def get_code_solutions(lesson: Lesson) -> list[CodeSolution]:
-    stepik = StepikClient()
-    code_solutions = []
-
-    for step_id in lesson.steps:
-        step = stepik.get_step(id=step_id)
-        if step.block.name != "code":
-            continue
-
-        code_problem = parse_block_text(step.block.text)
-        code_str = stepik.get_solution_code(step_id=step_id)
-        if not code_problem or not code_str:
-            continue
-
-        img_path = f"{IMGS_PATH}/{legalize_title(code_problem.title)}.png"
-        save_code_picture(img_path, code_str)
-        code_solutions.append(
-            CodeSolution(
-                title=code_problem.title,
-                description=code_problem.description,
-                img_path=img_path,
-            )
-        )
-    return code_solutions
-```
-
-### Сборка документа
-
-Вся верстка живет в `WordClient`. Главный трюк для ГОСТа – не настраивать шрифты и отступы кодом, а взять за основу свой старый отчет: титульник, введение, стили заголовков и абзацев подтягиваются из шаблона. А если у лабы свое введение и цель, рядом кладется `assets/<номер раздела>-template.docx` – и для этого раздела берется он.
-
-```python
-class WordClient:
-    def __init__(self, template_path: str):
-        self.doc = Document(template_path)
-
-    def add_heading2(self, title: str, heading_no: int) -> None:
-        self.doc.add_heading(f"2.{heading_no}. Решения задач на тему «{title}»", level=2)
-
-    def add_solution(self, no: int, title: str, descr: str, img_path: str) -> None:
-        self.doc.add_paragraph(f"«{title}».")
-        self.doc.add_paragraph(descr)
-
-        pic = self.doc.add_paragraph()
-        pic.add_run().add_picture(img_path)
-        pic.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-
-        label = self.doc.add_paragraph(f"Рисунок 2.{no} – Решение задачи «{title}»")
-        label.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-
-    def save(self, doc_name: str) -> None:
-        os.makedirs("my_docs", exist_ok=True)
-        self.doc.save(f"my_docs/{doc_name}.docx")
-```
-
-`main.py` просто связывает все вместе: спрашивает номер раздела, проходит по урокам и складывает решения в документ с правильной нумерацией рисунков. Полный код – в [репозитории](https://github.com/viteax/stepik-report-creator).
+Вся верстка живет в `WordClient` на `python-docx`. Главный трюк для ГОСТа – не настраивать шрифты и отступы кодом, а взять за основу свой старый отчет: титульник, введение, стили заголовков и абзацев подтягиваются из шаблона. А если у лабы свое введение и цель, рядом кладется `assets/<номер раздела>-template.docx` – и для этого раздела берется он. `main.py` просто связывает все вместе: спрашивает номер раздела, проходит по урокам и складывает решения в документ с правильной нумерацией.
 
 ### Запуск
 
@@ -252,28 +98,7 @@ uv run main.py 7        # 7 – номер раздела (лабы)
 
 Главная претензия в комментариях – «код рисунками – брр». Справедливо: картинку нельзя скопировать, ее не найти поиском по документу, и выглядит она хуже текста. Изначально я думал, что `python-docx` такое не умеет, но @milssky подсказал решение: как и в обычном Word, достаточно завести отдельный стиль для кода. А подсветку синтаксиса дает `pygments`, который советовал @Andrey_Solomatin.
 
-Сначала создаем стиль – моноширинный шрифт, одинарный интервал, без красной строки:
-
-```python
-from docx.enum.style import WD_STYLE_TYPE
-from docx.shared import Pt
-
-CODE_STYLE = "Code"
-
-
-def ensure_code_style(doc) -> None:
-    if CODE_STYLE in [s.name for s in doc.styles]:
-        return
-    style = doc.styles.add_style(CODE_STYLE, WD_STYLE_TYPE.PARAGRAPH)
-    style.base_style = doc.styles["Normal"]
-    style.font.name = "Courier New"  # есть на любом компьютере, в отличие от JetBrains Mono
-    style.font.size = Pt(10)
-    pf = style.paragraph_format
-    pf.first_line_indent = Pt(0)
-    pf.line_spacing = 1.0
-    pf.space_before = Pt(0)
-    pf.space_after = Pt(0)
-```
+Сначала создаем стиль `Code` – моноширинный Courier New (он есть на любом компьютере, в отличие от JetBrains Mono), одинарный интервал, без красной строки и отступов между абзацами.
 
 Затем разбиваем код на токены и каждый пишем отдельным фрагментом (run) со своим цветом. Переносы строк `python-docx` сам превращает в разрывы строки, так что весь листинг – один абзац:
 
@@ -315,7 +140,7 @@ def add_code(self, code: str) -> None:
 - Проектом пользуются около 60 человек – две группы по 30.
 - Чего пока нет: подсветка только для Python, задачи без заголовка в условии пропускаются, формулы из условий упрощаются до текста.
 
-Когда я делал отчеты вручную, копируя куски текста в Word, меня раздражала монотонность и я не понимал, чему эта работа учит. А потом, повторяя одно и то же полтора часа подряд, понял: для меня смысл оказался не в том, чтобы сделать отчет, а в том, чтобы этот процесс автоматизировать.
+Когда я делал отчеты вручную, копируя куски текста в Word, меня раздражала монотонность и я не понимал, чему эта работа учит. А потом, повторяя одно и то же два часа подряд, понял: для меня смысл оказался не в том, чтобы сделать отчет, а в том, чтобы этот процесс автоматизировать.
 
 Проект научил меня разбираться в сырой документации API, искать информацию и подходить к задаче с разных сторон, чтобы найти самое простое решение. Раньше я не думал, что с помощью программирования можно решать такие бытовые задачи. Оказалось, можно – и с тех пор программирование для меня еще и про фантазию и творчество.
 
