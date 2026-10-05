@@ -9,4 +9,5 @@ class CodeProblem(BaseModel):
 class CodeSolution(BaseModel):
     title: str
     description: str
-    img_path: str
+    code: str
+    img_path: str | None = None
