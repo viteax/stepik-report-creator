@@ -1,7 +1,7 @@
 [project]
-name = "very-interesting-task"
+name = "stepik-report-creator"
 version = "1.0.0"
-description = "This program solves veeeeeery interesting task"
+description = "Собирает docx-отчет с решениями задач из курса Stepik: код, условия и подписи — за одну команду"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
