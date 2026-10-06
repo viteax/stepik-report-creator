@@ -1,7 +1,7 @@
 # stepik-report-creator
 
 [![Tests](https://github.com/viteax/stepik-report-creator/actions/workflows/tests.yml/badge.svg)](https://github.com/viteax/stepik-report-creator/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/viteax/stepik-report-creator/graph/badge.svg)](https://codecov.io/gh/viteax/stepik-report-creator)
+![coverage](https://raw.githubusercontent.com/viteax/stepik-report-creator/badges/coverage.svg)
 ![Python](https://img.shields.io/badge/python-3.13%2B-blue)
 ![uv](https://img.shields.io/badge/built%20with-uv-purple)
 [![License](https://img.shields.io/github/license/viteax/stepik-report-creator)](LICENSE)
