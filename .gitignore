@@ -18,3 +18,7 @@ my_docs/
 
 .env
 .vscode
+
+# Coverage
+.coverage
+coverage.xml

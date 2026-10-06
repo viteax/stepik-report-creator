@@ -4,6 +4,7 @@ from clients.stepik import StepikClient
 from models.stepik import Block, Step
 
 
+@pytest.mark.network
 def test_get_lessons():
     stepik = StepikClient()
     lessons = stepik.get_lessons(
@@ -14,6 +15,7 @@ def test_get_lessons():
     assert [lesson.id for lesson in lessons] == [290248, 363342, 1086413, 1602702]
 
 
+@pytest.mark.network
 def test_get_lessons_ids_invalid():
     stepik = StepikClient()
     with pytest.raises(IndexError):
@@ -23,6 +25,7 @@ def test_get_lessons_ids_invalid():
         )
 
 
+@pytest.mark.network
 def test_get_step():
     stepik = StepikClient()
     step = stepik.get_step(1010120)

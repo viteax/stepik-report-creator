@@ -1,5 +1,12 @@
 # stepik-report-creator
 
+[![Tests](https://github.com/viteax/stepik-report-creator/actions/workflows/tests.yml/badge.svg)](https://github.com/viteax/stepik-report-creator/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/viteax/stepik-report-creator/graph/badge.svg)](https://codecov.io/gh/viteax/stepik-report-creator)
+![Python](https://img.shields.io/badge/python-3.13%2B-blue)
+![uv](https://img.shields.io/badge/built%20with-uv-purple)
+[![License](https://img.shields.io/github/license/viteax/stepik-report-creator)](LICENSE)
+![Last commit](https://img.shields.io/github/last-commit/viteax/stepik-report-creator)
+
 Собирает docx-отчет с решениями задач из курса на Stepik: берет условие, последнее
 правильное решение и оформляет все по шаблону. Раньше это были сотни раз
 «открыл окно, скопировал, вставил в ворд». Теперь это одна команда.
@@ -107,10 +114,12 @@ assets/            шаблоны docx и шрифт
 ## Тесты
 
 ```bash
-uv run pytest
+uv run pytest -m "not network"                 # без сети и ключей (это же запускает CI)
+uv run pytest -m "not network" --cov           # то же с покрытием
+uv run pytest                                  # все, включая тесты с реальным API
 ```
 
-Часть тестов обращается к настоящему API Stepik, для них нужен заполненный `.env`.
+Тесты с пометкой `network` обращаются к настоящему API Stepik, для них нужен заполненный `.env`.
 
 ## Ограничения
 

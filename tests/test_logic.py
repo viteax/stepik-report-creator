@@ -1,5 +1,6 @@
 import os
 
+import pytest
 from PIL import Image
 
 from clients.stepik import StepikClient
@@ -28,6 +29,7 @@ def test_parse_block_text():
     assert code_problem.description == ans
 
 
+@pytest.mark.network
 def test_debug():
     stepik = StepikClient()
     step = stepik.get_step(1223214)
