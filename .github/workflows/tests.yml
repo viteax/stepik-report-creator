@@ -1,0 +1,40 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # Тесты с пометкой network ходят в Stepik API и требуют ключи из .env – в CI их пропускаем
+      - name: Run tests with coverage
+        run: uv run pytest -m "not network" --cov --cov-report=term --cov-report=xml
+
+      # Значок покрытия рисуется скриптом и лежит в ветке badges (без сторонних сервисов)
+      - name: Publish coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          uv run python scripts/coverage_badge.py coverage.xml "$RUNNER_TEMP/coverage.svg"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan badges-tmp
+          git rm -rf . -q
+          cp "$RUNNER_TEMP/coverage.svg" coverage.svg
+          git add coverage.svg
+          git commit -q -m "Update coverage badge"
+          git push --force origin badges-tmp:badges
