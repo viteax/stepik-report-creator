@@ -3,8 +3,8 @@ import os
 import pytest
 from PIL import Image
 
-from clients.stepik import StepikClient
-from logic import IMGS_PATH, parse_block_text, save_code_picture
+from stepik_report.cli import make_client
+from stepik_report.solutions import IMGS_PATH, parse_block_text, save_code_picture
 
 
 def test_save_picture():
@@ -31,7 +31,7 @@ def test_parse_block_text():
 
 @pytest.mark.network
 def test_debug():
-    stepik = StepikClient()
+    stepik = make_client()
     step = stepik.get_step(1223214)
 
     code_problem = parse_block_text(step.block.text)

@@ -11,6 +11,10 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 3.11 – минимальная версия пакета (на ней его берет бот «Без замечаний»), 3.13 – основная
+        python: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +23,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --python ${{ matrix.python }}
 
       # Тесты с пометкой network ходят в Stepik API и требуют ключи из .env – в CI их пропускаем
       - name: Run tests with coverage
@@ -27,7 +31,7 @@ jobs:
 
       # Значок покрытия рисуется скриптом и лежит в ветке badges (без сторонних сервисов)
       - name: Publish coverage badge
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && matrix.python == '3.13'
         run: |
           uv run python scripts/coverage_badge.py coverage.xml "$RUNNER_TEMP/coverage.svg"
           git config user.name "github-actions[bot]"

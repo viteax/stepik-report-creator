@@ -2,7 +2,7 @@ from docx import Document
 from pygments import lex
 from pygments.lexers import get_lexer_by_name
 
-from docx_code import CODE_STYLE, _runs, add_code, add_listing, ensure_code_style
+from stepik_report.docx_code import CODE_STYLE, _runs, add_code, add_listing, ensure_code_style
 
 
 def test_code_style_is_created_once():

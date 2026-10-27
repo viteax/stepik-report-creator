@@ -1,26 +1,39 @@
 [project]
 name = "stepik-report-creator"
-version = "1.1.0"
+version = "2.0.0"
 description = "Собирает docx-отчет с решениями задач из курса Stepik: код, условия и подписи — за одну команду"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
+# только то, что нужно библиотеке; командной строке – еще группа cli ниже
 dependencies = [
     "beautifulsoup4>=4.13.4",
-    "coloredlogs>=15.0.1",
-    "environs>=14.1.1",
-    "pillow>=11.2.1",
     "pygments>=2.19.0",
     "pydantic>=2.11.3",
     "python-docx>=1.1.2",
     "requests>=2.32.3",
 ]
 
+[project.optional-dependencies]
+# код картинками (--images)
+images = ["pillow>=11.2.1"]
+
 [dependency-groups]
-dev = ["pytest>=8.3.5", "pytest-cov>=6.0.0", "ipython>=9.1.0"]
+cli = ["coloredlogs>=15.0.1", "environs>=14.1.1", "pillow>=11.2.1"]
+dev = ["pytest>=8.3.5", "pytest-cov>=6.0.0", "ipython>=8.18"]
+
+[tool.uv]
+# uv sync в этом репозитории ставит и CLI, а проекты, которые берут пакет зависимостью, – нет
+default-groups = ["cli", "dev"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["stepik_report"]
 
 [tool.pytest.ini_options]
 markers = ["network: тесты, которым нужен доступ к Stepik API и ключи в .env"]
 
 [tool.coverage.run]
-source = ["."]
-omit = ["tests/*", ".venv/*"]
+source = ["stepik_report", "scripts"]

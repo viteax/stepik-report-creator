@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/viteax/stepik-report-creator/actions/workflows/tests.yml/badge.svg)](https://github.com/viteax/stepik-report-creator/actions/workflows/tests.yml)
 ![coverage](https://raw.githubusercontent.com/viteax/stepik-report-creator/badges/coverage.svg)
-![Python](https://img.shields.io/badge/python-3.13%2B-blue)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![uv](https://img.shields.io/badge/built%20with-uv-purple)
 [![License](https://img.shields.io/github/license/viteax/stepik-report-creator)](LICENSE)
 ![Last commit](https://img.shields.io/github/last-commit/viteax/stepik-report-creator)
@@ -16,6 +16,7 @@
 - [Быстрый старт](#быстрый-старт)
 - [Аргументы командной строки](#аргументы-командной-строки)
 - [Как это устроено](#как-это-устроено)
+- [Как библиотека](#как-библиотека)
 - [Создаем кастомные настройки](#создаем-кастомные-настройки)
 - [Тесты](#тесты)
 - [Ограничения](#ограничения)
@@ -44,7 +45,8 @@
 - подпись «Листинг 2.N» стоит над кодом и не отрывается от него при переносе страницы;
 - старый режим с картинками (Pillow, JetBrains Mono) включается флагом `--images`;
 - для каждого раздела можно положить свой шаблон `assets/<номер>-template.docx`;
-- в конце печатает, сколько задач попало в отчет и сколько это заняло времени.
+- в конце печатает, сколько задач попало в отчет и сколько это заняло времени;
+- подключается в другие проекты как пакет `stepik_report` – так его использует бот [«Без замечаний»](https://github.com/viteax/oformlyator), где студент входит в Stepik своим аккаунтом.
 
 ## Быстрый старт
 
@@ -77,14 +79,15 @@ uv run main.py 7 --images         # код картинками вместо т�
 ## Как это устроено
 
 ```
-main.py            точка входа: аргументы, обход уроков, замер времени
-oauth.py           получение токена по client-credentials
-clients/stepik.py  запросы к API Stepik (курс, раздел, уроки, шаги, решения)
-clients/word.py    запись в docx (заголовки, картинки, подписи)
-docx_code.py       код текстом с подсветкой: стиль Code, рамка, заливка (Pygments)
-logic.py           разбор условия задачи и рендер кода в картинку
-models/            pydantic-модели ответов API и внутренних данных
-assets/            шаблоны docx и шрифт
+main.py                    точка входа для `uv run main.py 7`
+stepik_report/
+  cli.py                   аргументы, ключи из .env, обход уроков, замер времени
+  client.py                API Stepik: токен (client-credentials), курс, разделы, уроки, шаги, решения
+  solutions.py             разбор условия задачи, сбор решений по урокам, код картинкой
+  report.py                запись в docx: заголовки, условия, листинги или картинки, подписи
+  docx_code.py             код текстом с подсветкой: стиль Code, рамка, заливка (Pygments)
+  models.py                pydantic-модели ответов API и внутренних данных
+assets/                    шаблоны docx и шрифт (только для командной строки)
 ```
 
 Решение берется из эндпоинта `/api/submissions?step=<id>`: из списка попыток выбирается
@@ -92,6 +95,32 @@ assets/            шаблоны docx и шрифт
 На каждую задачу уходит несколько запросов к API, поэтому время работы зависит от сети
 и числа задач в разделе. Замер на реальных данных: один отчет собирается за ~2 секунды
 (`uv run main.py 7`).
+
+## Как библиотека
+
+Пакет ставится прямо из GitHub по тегу версии:
+
+```bash
+uv add "stepik-report-creator @ https://github.com/viteax/stepik-report-creator/archive/refs/tags/v2.0.0.tar.gz"
+```
+
+```python
+from stepik_report import Report, StepikClient, get_section_solutions
+
+stepik = StepikClient(token)       # токен студента (OAuth) или StepikClient.from_credentials(id, secret)
+section = stepik.get_section(stepik.get_section_id(58852, 7))
+report = Report(part_no=1, lesson_heading="{part}.{n} Решения задач на тему «{title}»")
+for lesson in get_section_solutions(stepik, section):
+    report.add_lesson(lesson.title)
+    for solution in lesson.solutions:
+        report.add_solution(solution)
+report.save("7.docx")
+```
+
+- Зависимостями ставится только нужное библиотеке; `coloredlogs` и `environs` – в группе `cli`, ее `uv sync` здесь ставит сам. Картинки кода – extra `images` (Pillow).
+- Клиент синхронный (requests); из asyncio – через `asyncio.to_thread`.
+- Ошибки: `AuthError` (токен не приняли), `NotFoundError`, остальное – `StepikError`, сетевые сбои тоже.
+- Новая версия – тег `vX.Y.Z` и версия в `pyproject.toml`; проект, который берет пакет, меняет тег в своей зависимости.
 
 ## Создаем кастомные настройки
 
@@ -101,13 +130,14 @@ assets/            шаблоны docx и шрифт
 
 Существует шаблон, находящийся в папке *assets/template.docx*, на нем строится документ.
 Для конкретного раздела можно положить рядом файл *assets/<номер>-template.docx*,
-он будет использован вместо общего. Поменять структуру добавления решений в документ можно
-в файле *clients/word.py*.
+он будет использован вместо общего. Нумерация и подписи – аргументы `Report`
+(`part_no`, `lesson_heading`, `listing_caption`), а саму структуру можно поменять
+в файле *stepik_report/report.py*.
 
 ### Рендер кода решения
 
-Код вставляется текстом: стиль `Code` и подсветка Pygments живут в отдельном модуле *docx_code.py* (шрифт и размер – аргументы `ensure_code_style`, цветовая схема и язык – аргументы `add_code`). Модуль не зависит от остального проекта, его можно забрать в свой генератор документов.
-Режим `--images` рисует код картинкой, это делается в файле *logic.py* через либу *Pillow*.
+Код вставляется текстом: стиль `Code` и подсветка Pygments живут в отдельном модуле *stepik_report/docx_code.py* (шрифт и размер – аргументы `ensure_code_style`, цветовая схема и язык – аргументы `add_code`). Модуль не зависит от остального проекта, его можно забрать в свой генератор документов (старый путь `docx_code.py` в корне тоже работает).
+Режим `--images` рисует код картинкой, это делается в файле *stepik_report/solutions.py* через либу *Pillow*.
 Здесь фантазия никак не ограничивается, твори! Можно поменять фон, шрифт, размер шрифта,
 цвет шрифта, добавить цифры к строкам, раскрасить определенные слова, все что угодно.
 

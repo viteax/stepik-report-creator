@@ -1,12 +1,12 @@
 import pytest
 
-from clients.stepik import StepikClient
-from models.stepik import Block, Step
+from stepik_report.cli import make_client
+from stepik_report.models import Block, Step
 
 
 @pytest.mark.network
 def test_get_lessons():
-    stepik = StepikClient()
+    stepik = make_client()
     lessons = stepik.get_lessons(
         course_id=58852,
         section_no=1,
@@ -17,7 +17,7 @@ def test_get_lessons():
 
 @pytest.mark.network
 def test_get_lessons_ids_invalid():
-    stepik = StepikClient()
+    stepik = make_client()
     with pytest.raises(IndexError):
         stepik.get_lessons(
             course_id=58852,
@@ -27,7 +27,7 @@ def test_get_lessons_ids_invalid():
 
 @pytest.mark.network
 def test_get_step():
-    stepik = StepikClient()
+    stepik = make_client()
     step = stepik.get_step(1010120)
 
     assert step == Step(
